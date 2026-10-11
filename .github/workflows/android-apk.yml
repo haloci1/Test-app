@@ -13,6 +13,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      VERSION_CODE: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +39,7 @@ jobs:
           npm ci
           npx cap sync android
 
-      - name: Ndërto APK
+      - name: Ndërto APK (provë, me reklama provë)
         working-directory: build/numina-android/android
         run: |
           chmod +x gradlew
@@ -48,7 +51,31 @@ jobs:
           path: build/numina-android/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      # Faqja web: reader.html (për lexueset) + faqet ligjore
+      # Versioni për Google Play: i nënshkruar, me reklama reale. Ndërtohet vetëm kur ke vendosur çelësin te Secrets.
+      - name: Ndërto AAB për Play Store
+        if: env.HAS_KEY == 'true'
+        working-directory: build/numina-android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          sed -i "s/ADS_TEST: true/ADS_TEST: false/" www/config.js
+          npx cap sync android
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/numina-upload.jks
+          export KEYSTORE_FILE=numina-upload.jks
+          cd android && ./gradlew bundleRelease --no-daemon
+          rm -f app/numina-upload.jks
+
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          name: numina-aab-playstore
+          path: build/numina-android/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      # Faqet web: reader.html, admin.html, reset.html, faqet ligjore
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/numina-android/www
