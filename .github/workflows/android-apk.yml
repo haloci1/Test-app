@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -42,3 +47,19 @@ jobs:
           name: numina-apk
           path: build/numina-android/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
+
+      # Faqja web: reader.html (për lexueset) + faqet ligjore
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/numina-android/www
+
+  web:
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
